@@ -280,7 +280,17 @@ function rotatePlane(anchor=null){
   if(!placing){ toast("Avioanele sunt deja plasate."); return; }
   if(anchor!==null) lastAnchor=anchor;
   orientation=(orientation+1)%4;
-  previewCells=cellsForAnchor(lastAnchor);
+  let cells=cellsForAnchor(lastAnchor);
+  if(!validPlacement(cells,myPlanes)){
+    const requested=lastAnchor;
+    const candidates=Array.from({length:100},(_,i)=>i).sort((a,b)=>{
+      const ar=Math.floor(requested/N), ac=requested%N;
+      return Math.abs(Math.floor(a/N)-ar)+Math.abs(a%N-ac)-Math.abs(Math.floor(b/N)-ar)-Math.abs(b%N-ac);
+    });
+    lastAnchor=candidates.find(i=>validPlacement(cellsForAnchor(i),myPlanes));
+    cells=cellsForAnchor(lastAnchor);
+  }
+  previewCells=cells;
   const names=["↑ Nord","→ Est","↓ Sud","← Vest"];
   directionEl.textContent=names[orientation];
   setStatus("↻ Direcția avionului: "+names[orientation]+" — plasează avionul");
@@ -387,7 +397,7 @@ function newGame(){
   gameOver=false;
   reveal=false;
   setStatus("📍 Plasează avionul 1 din 3");
-  mySub.textContent="Forma este exact cea din desen. Click stânga pentru plasare; click dreapta rotește avionul cu 90° (patru direcții).";
+  mySub.textContent="Click stânga plasează avionul; click dreapta pe tablă sau „Rotește” îl întoarce succesiv: nord → est → sud → vest. Direcția apare lângă buton.";
   renderGrid();
 }
 
