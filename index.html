@@ -14,11 +14,12 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 body{min-height:100vh}
-.wrap{width:min(100%,760px);margin:auto;padding:12px}
+.wrap{width:min(100%,1240px);margin:auto;padding:12px}
 header{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}
 h1{font-size:22px;margin:0}
 .status{background:#132d47;border:1px solid #315474;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800}
-.panel{background:var(--panel);border:1px solid #294a67;border-radius:16px;padding:10px;margin-bottom:10px}
+.panel{background:var(--panel);border:1px solid #294a67;border-radius:16px;padding:10px;margin-bottom:0}
+.boards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:10px}
 h2{font-size:17px;margin:0 0 3px}
 .sub{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.35}
 .grid{
@@ -59,6 +60,39 @@ button.secondary{background:#29425c}
   h1{font-size:19px}.status{font-size:11px;padding:7px 9px}
   .panel{padding:8px}.grid{gap:2px}.cell{border-radius:4px}
 }
+
+@media(max-width:700px){
+  html,body{height:100%;overflow:hidden}
+  body{min-height:0;height:100dvh}
+  .wrap{height:100dvh;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:6px}
+  header{flex:none;margin-bottom:5px;gap:6px}
+  h1{font-size:16px}
+  .status{font-size:10px;padding:6px 8px}
+  .boards{flex:1;min-height:0;grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(0,1fr);gap:5px;margin-bottom:5px}
+  .panel{min-height:0;overflow:hidden;padding:6px;display:flex;flex-direction:column}
+  h2{font-size:14px;margin:0}
+  .my-heading{flex:none;min-height:26px;gap:5px;margin-bottom:2px}
+  .my-heading>div{gap:4px!important}
+  .direction-controls{gap:2px}
+  .direction-choice{width:22px;height:22px;font-size:13px}
+  .direction{min-width:38px;font-size:10px}
+  button.rotate-inline{min-height:28px;padding:3px 5px;font-size:11px}
+  .sub{font-size:10px;line-height:1.15;margin-bottom:3px}
+  .grid{width:min(100%,calc((100dvh - 285px)/2));gap:2px;margin:auto}
+  .cell{border-radius:3px}
+  .coords{font-size:8px;margin-top:1px;flex:none}
+  .buttons{flex:none;gap:4px}
+  button.action{min-height:35px;font-size:11px;border-radius:8px}
+  .help{display:none}
+}
+@media(max-width:380px){
+  .direction{display:none}
+  .my-heading h2{font-size:13px}
+  .my-heading>div{gap:3px!important}
+  .direction-choice{width:20px;height:21px}
+  button.rotate-inline{padding:3px 4px;font-size:10px}
+}
+
 </style>
 </head>
 <body>
@@ -68,6 +102,7 @@ button.secondary{background:#29425c}
   <div id="status" class="status">Plasează avionul 1 din 3</div>
 </header>
 
+<div class="boards">
 <section class="panel">
   <div class="my-heading"><h2>🟢 Avioanele mele</h2><div style="display:flex;align-items:center;gap:7px"><div class="direction-controls" aria-label="Alege direcția avionului"><button class="direction-choice active" type="button" data-direction="0" aria-label="Nord" aria-pressed="true">↑</button><button class="direction-choice" type="button" data-direction="1" aria-label="Est" aria-pressed="false">→</button><button class="direction-choice" type="button" data-direction="2" aria-label="Sud" aria-pressed="false">↓</button><button class="direction-choice" type="button" data-direction="3" aria-label="Vest" aria-pressed="false">←</button></div><span class="direction" id="direction">↑ Nord</span><button class="action secondary rotate-inline" id="rotateBtn" type="button">↻ Rotește</button></div></div>
   <div id="mySub" class="sub">
@@ -83,6 +118,8 @@ button.secondary{background:#29425c}
   <div id="enemyGrid" class="grid"></div>
   <div class="coords">A B C D E F G H I J</div>
 </section>
+
+</div>
 
 <div class="buttons">
   <button class="action" id="newBtn">🔄 Joc nou</button>
