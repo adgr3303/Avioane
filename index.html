@@ -71,7 +71,7 @@ button.secondary{background:#29425c}
 <section class="panel">
   <div class="my-heading"><h2>🟢 Avioanele mele</h2><button class="action secondary rotate-inline" id="rotateBtn" type="button">↻ Rotește</button></div>
   <div id="mySub" class="sub">
-    Forma este exact cea din desen. Click stânga pe o celulă pentru plasare; click dreapta rotește avionul.
+    Forma este exact cea din desen. Click stânga pe o celulă pentru plasare; click dreapta rotește avionul cu 90° (patru direcții).
   </div>
   <div id="myGrid" class="grid"></div>
   <div class="coords">A B C D E F G H I J</div>
@@ -131,7 +131,7 @@ let myShots = new Set();
 let enemyShots = new Set();
 let placing = true;
 let planeNo = 0;
-let vertical = false;
+let orientation = 0;
 let gameOver = false;
 let reveal = false;
 let previewCells = null;
@@ -163,7 +163,9 @@ function rotate90(shape){
   acolo va fi vârful avionului.
 */
 function getShape(){
-  return vertical ? rotate90(SHAPE) : SHAPE;
+  let shape=SHAPE;
+  for(let i=0;i<orientation;i++) shape=rotate90(shape);
+  return shape;
 }
 
 function cellsForAnchor(anchor){
@@ -171,21 +173,9 @@ function cellsForAnchor(anchor){
   const ac = anchor%N;
   const shape = getShape();
 
-  // În forma inițială, X-ul de sus este [0][2].
-  // După rotație, găsim dinamic celula pivot.
-  let pr=-1, pc=-1;
-  for(let r=0;r<shape.length;r++){
-    for(let c=0;c<shape[r].length;c++){
-      if(shape[r][c]){
-        // Pivotul este celula corespunzătoare primului X din forma originală.
-        // Pentru forma rotită, pivotul devine poziția rotită a [0,2].
-      }
-    }
-  }
-
-  // Rotește coordonata pivotului [0,2] în jurul matricei.
-  if(!vertical){ pr=0; pc=2; }
-  else { pr=2; pc=shape[0].length-1; }
+  // Coordonatele pivotului [0,2] după fiecare rotație în sens orar.
+  const pivots=[[0,2],[2,3],[3,2],[2,0]];
+  const [pr,pc]=pivots[orientation];
 
   const result=[];
   for(let r=0;r<shape.length;r++){
@@ -213,11 +203,10 @@ function randomPlanes(){
   const result=[];
   for(let tries=0; tries<200000 && result.length<3; tries++){
     const anchor=Math.floor(Math.random()*100);
-    const v=Math.random()<0.5;
-    const old=vertical;
-    vertical=v;
+    const old=orientation;
+    orientation=Math.floor(Math.random()*4);
     const c=cellsForAnchor(anchor);
-    vertical=old;
+    orientation=old;
     if(validPlacement(c,result)) result.push(c);
   }
   return result.length===3 ? result : [];
@@ -286,9 +275,9 @@ function renderMyOnly(){
 
 function rotatePlane(anchor=null){
   if(!placing){ toast("Avioanele sunt deja plasate."); return; }
-  vertical=!vertical;
+  orientation=(orientation+1)%4;
   previewCells=anchor===null ? null : cellsForAnchor(anchor);
-  setStatus(vertical ? "↻ Forma rotită — plasează avionul" : "↻ Forma normală — plasează avionul");
+  setStatus("↻ Direcția avionului: "+(orientation*90)+"° — plasează avionul");
   renderGrid();
 }
 
@@ -314,9 +303,9 @@ function placePlane(anchor){
 }
 
 function autoPlace(){
-  const old=vertical;
+  const old=orientation;
   const result=randomPlanes();
-  vertical=old;
+  orientation=old;
   if(result.length!==3){
     toast("Nu am găsit o așezare. Încearcă din nou.");
     return;
@@ -385,12 +374,12 @@ function newGame(){
   enemyShots=new Set();
   placing=true;
   planeNo=0;
-  vertical=false;
+  orientation=0;
   previewCells=null;
   gameOver=false;
   reveal=false;
   setStatus("📍 Plasează avionul 1 din 3");
-  mySub.textContent="Forma este exact cea din desen. Click stânga pe o celulă pentru plasare; click dreapta rotește avionul.";
+  mySub.textContent="Forma este exact cea din desen. Click stânga pentru plasare; click dreapta rotește avionul cu 90° (patru direcții).";
   renderGrid();
 }
 
