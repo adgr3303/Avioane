@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b1d31">
+<title>Avioane — Duel</title>
+<style>
+:root{
+  --bg:#081522; --panel:#10263d; --cell:#193652; --line:#2a5274;
+  --text:#f4f8fc; --muted:#9fb4c9; --blue:#3285f5;
+  --green:#16ad80; --gold:#ffd05a; --red:#d94a4a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{min-height:100vh}
+.wrap{width:min(100%,760px);margin:auto;padding:12px}
+header{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}
+h1{font-size:22px;margin:0}
+.status{background:#132d47;border:1px solid #315474;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800}
+.panel{background:var(--panel);border:1px solid #294a67;border-radius:16px;padding:10px;margin-bottom:10px}
+h2{font-size:17px;margin:0 0 3px}
+.sub{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.35}
+.grid{
+  display:grid;grid-template-columns:repeat(10,1fr);gap:3px;
+  width:min(100%,560px);margin:auto;
+}
+.cell{
+  appearance:none;border:1px solid var(--line);background:var(--cell);
+  border-radius:6px;aspect-ratio:1;padding:0;position:relative;
+}
+.cell.preview{background:#5c4c20;border:3px solid var(--gold)}
+.cell.plane{background:var(--green);border-color:#55e7bd}
+.cell.hit{background:var(--red)!important}
+.cell.miss{background:#334b63!important}
+.cell.reveal{background:#755a1d!important}
+.cell.hit::after{content:"×";position:absolute;inset:0;display:grid;place-items:center;font-size:20px;font-weight:900}
+.cell.miss::after{content:"•";position:absolute;inset:0;display:grid;place-items:center;font-size:25px}
+.cell:active{transform:scale(.94)}
+.coords{width:min(100%,560px);margin:3px auto 0;display:grid;grid-template-columns:repeat(10,1fr);text-align:center;color:#718aa2;font-size:9px}
+.buttons{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+button.action{
+  min-height:48px;border:0;border-radius:12px;background:var(--blue);
+  color:white;font-size:14px;font-weight:900
+}
+button.secondary{background:#29425c}
+.help{font-size:12px;color:var(--muted);line-height:1.45;margin:8px 2px 0}
+.toast{
+  position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+  background:#152d45;border:1px solid #4b6781;border-radius:12px;
+  padding:11px 14px;font-weight:800;display:none;z-index:20;
+  max-width:90%;text-align:center
+}
+@media(max-width:430px){
+  .wrap{padding:8px}
+  h1{font-size:19px}.status{font-size:11px;padding:7px 9px}
+  .panel{padding:8px}.grid{gap:2px}.cell{border-radius:4px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>✈️ AVIOANE — DUEL</h1>
+  <div id="status" class="status">Plasează avionul 1 din 3</div>
+</header>
+
+<section class="panel">
+  <h2>🟢 Avioanele mele</h2>
+  <div id="mySub" class="sub">
+    Forma este exact cea din desen. Atinge celula unde vrei să fie vârful avionului.
+  </div>
+  <div id="myGrid" class="grid"></div>
+  <div class="coords">A B C D E F G H I J</div>
+</section>
+
+<section class="panel">
+  <h2>🔴 Adversarul</h2>
+  <div class="sub">După ce ai plasat cele 3 avioane, atinge o celulă pentru atac.</div>
+  <div id="enemyGrid" class="grid"></div>
+  <div class="coords">A B C D E F G H I J</div>
+</section>
+
+<div class="buttons">
+  <button class="action" id="newBtn">🔄 Joc nou</button>
+  <button class="action secondary" id="rotateBtn">↻ Rotește</button>
+  <button class="action secondary" id="autoBtn">⚡ Așază automat</button>
+  <button class="action secondary" id="revealBtn">👁 Arată avioanele</button>
+</div>
+
+<p class="help">
+  Fiecare avion are 10 celule. Forma este: <b>1-5-1-3</b>.
+  Ai 3 avioane. Câștigi când lovești toate cele 30 de celule.
+</p>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+"use strict";
+
+const N = 10;
+
+/*
+  FORMA EXACTĂ DIN POZA TA:
+
+    X
+  XXXXX
+    X
+   XXX
+
+  Matrice 4 x 5:
+    00100
+    11111
+    00100
+    01110
+
+  Celula pe care o atingi este X-ul de sus.
+*/
+const SHAPE = [
+  [0,0,1,0,0],
+  [1,1,1,1,1],
+  [0,0,1,0,0],
+  [0,1,1,1,0]
+];
+
+let myPlanes = [];
+let enemyPlanes = [];
+let myShots = new Set();
+let enemyShots = new Set();
+let placing = true;
+let planeNo = 0;
+let vertical = false;
+let gameOver = false;
+let reveal = false;
+let previewCells = null;
+
+const myGrid = document.getElementById("myGrid");
+const enemyGrid = document.getElementById("enemyGrid");
+const statusEl = document.getElementById("status");
+const mySub = document.getElementById("mySub");
+const toastEl = document.getElementById("toast");
+
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.style.display = "block";
+  clearTimeout(window.__toast);
+  window.__toast = setTimeout(()=>toastEl.style.display="none",1400);
+}
+function setStatus(msg){ statusEl.textContent = msg; }
+
+function rotate90(shape){
+  const h = shape.length, w = shape[0].length;
+  const out = Array.from({length:w},()=>Array(h).fill(0));
+  for(let r=0;r<h;r++) for(let c=0;c<w;c++) out[c][h-1-r]=shape[r][c];
+  return out;
+}
+
+/*
+  Anchorul este X-ul de sus din desen.
+  Asta înseamnă că atunci când utilizatorul atinge o celulă,
+  acolo va fi vârful avionului.
+*/
+function getShape(){
+  return vertical ? rotate90(SHAPE) : SHAPE;
+}
+
+function cellsForAnchor(anchor){
+  const ar = Math.floor(anchor/N);
+  const ac = anchor%N;
+  const shape = getShape();
+
+  // În forma inițială, X-ul de sus este [0][2].
+  // După rotație, găsim dinamic celula pivot.
+  let pr=-1, pc=-1;
+  for(let r=0;r<shape.length;r++){
+    for(let c=0;c<shape[r].length;c++){
+      if(shape[r][c]){
+        // Pivotul este celula corespunzătoare primului X din forma originală.
+        // Pentru forma rotită, pivotul devine poziția rotită a [0,2].
+      }
+    }
+  }
+
+  // Rotește coordonata pivotului [0,2] în jurul matricei.
+  if(!vertical){ pr=0; pc=2; }
+  else { pr=2; pc=shape[0].length-1; }
+
+  const result=[];
+  for(let r=0;r<shape.length;r++){
+    for(let c=0;c<shape[r].length;c++){
+      if(!shape[r][c]) continue;
+      const rr=ar + (r-pr);
+      const cc=ac + (c-pc);
+      if(rr<0 || rr>=N || cc<0 || cc>=N) return null;
+      result.push(rr*N+cc);
+    }
+  }
+  return result;
+}
+
+function overlaps(cells, planes){
+  const used = new Set(planes.flat());
+  return cells.some(x=>used.has(x));
+}
+
+function validPlacement(cells, planes){
+  return !!cells && !overlaps(cells,planes);
+}
+
+function randomPlanes(){
+  const result=[];
+  for(let tries=0; tries<200000 && result.length<3; tries++){
+    const anchor=Math.floor(Math.random()*100);
+    const v=Math.random()<0.5;
+    const old=vertical;
+    vertical=v;
+    const c=cellsForAnchor(anchor);
+    vertical=old;
+    if(validPlacement(c,result)) result.push(c);
+  }
+  return result.length===3 ? result : [];
+}
+
+function renderGrid(){
+  const mine = new Set(myPlanes.flat());
+  const enemy = new Set(enemyPlanes.flat());
+
+  myGrid.innerHTML="";
+  enemyGrid.innerHTML="";
+
+  for(let i=0;i<100;i++){
+    const b=document.createElement("button");
+    b.className="cell";
+    b.type="button";
+
+    if(mine.has(i)) b.classList.add("plane");
+    if(enemyShots.has(i)) b.classList.add(mine.has(i) ? "hit" : "miss");
+
+    if(placing && previewCells && previewCells.includes(i) && validPlacement(previewCells,myPlanes)){
+      b.classList.add("preview");
+    }
+
+    b.addEventListener("pointerdown",(e)=>{
+      e.preventDefault();
+      if(placing) placePlane(i);
+    });
+    b.addEventListener("pointerenter",()=>{
+      if(placing){
+        previewCells=cellsForAnchor(i);
+        renderMyOnly();
+      }
+    });
+    myGrid.appendChild(b);
+
+    const e=document.createElement("button");
+    e.className="cell";
+    e.type="button";
+
+    if(myShots.has(i)) e.classList.add(enemy.has(i) ? "hit" : "miss");
+    if(reveal && enemy.has(i) && !myShots.has(i)) e.classList.add("reveal");
+
+    e.addEventListener("pointerdown",(ev)=>{
+      ev.preventDefault();
+      attack(i);
+    });
+    enemyGrid.appendChild(e);
+  }
+}
+
+function renderMyOnly(){
+  const mine=new Set(myPlanes.flat());
+  [...myGrid.children].forEach((b,i)=>{
+    b.classList.toggle("plane",mine.has(i));
+    b.classList.toggle("preview",
+      placing && previewCells &&
+      previewCells.includes(i) &&
+      validPlacement(previewCells,myPlanes)
+    );
+  });
+}
+
+function placePlane(anchor){
+  const cells=cellsForAnchor(anchor);
+  if(!validPlacement(cells,myPlanes)){
+    toast("❌ Avionul nu încape aici.");
+    return;
+  }
+
+  myPlanes.push(cells);
+  planeNo++;
+  previewCells=null;
+
+  if(planeNo===3){
+    placing=false;
+    setStatus("🎯 Rândul tău — atacă!");
+    mySub.textContent="Cele 3 avioane sunt plasate. Acum atacă adversarul.";
+  }else{
+    setStatus("📍 Plasează avionul "+(planeNo+1)+" din 3");
+  }
+  renderGrid();
+}
+
+function autoPlace(){
+  const old=vertical;
+  const result=randomPlanes();
+  vertical=old;
+  if(result.length!==3){
+    toast("Nu am găsit o așezare. Încearcă din nou.");
+    return;
+  }
+  myPlanes=result;
+  planeNo=3;
+  placing=false;
+  previewCells=null;
+  setStatus("🎯 Rândul tău — atacă!");
+  mySub.textContent="Avioanele au fost așezate automat.";
+  renderGrid();
+}
+
+function attack(i){
+  if(placing){ toast("Mai întâi plasează cele 3 avioane."); return; }
+  if(gameOver || myShots.has(i)) return;
+
+  myShots.add(i);
+  const enemyCells=new Set(enemyPlanes.flat());
+
+  if(enemyCells.has(i)){
+    toast("💥 Lovitură!");
+  }else{
+    toast("💧 Ratat.");
+  }
+
+  if([...enemyCells].every(x=>myShots.has(x))){
+    gameOver=true;
+    setStatus("🏆 AI CÂȘTIGAT!");
+    renderGrid();
+    toast("🏆 Ai distrus toate avioanele!");
+    return;
+  }
+
+  setStatus(enemyCells.has(i) ? "💥 Lovitură! AI-ul răspunde..." : "💧 AI-ul răspunde...");
+  renderGrid();
+  setTimeout(enemyTurn,500);
+}
+
+function enemyTurn(){
+  if(gameOver) return;
+
+  const free=[];
+  for(let i=0;i<100;i++) if(!enemyShots.has(i)) free.push(i);
+  const i=free[Math.floor(Math.random()*free.length)];
+
+  enemyShots.add(i);
+  const mine=new Set(myPlanes.flat());
+
+  if([...mine].every(x=>enemyShots.has(x))){
+    gameOver=true;
+    setStatus("💥 AI-ul a câștigat!");
+    renderGrid();
+    toast("💥 AI-ul ți-a distrus toate avioanele!");
+    return;
+  }
+
+  setStatus(mine.has(i) ? "💥 AI-ul te-a lovit!" : "🎯 Rândul tău!");
+  renderGrid();
+}
+
+function newGame(){
+  myPlanes=[];
+  enemyPlanes=randomPlanes();
+  myShots=new Set();
+  enemyShots=new Set();
+  placing=true;
+  planeNo=0;
+  vertical=false;
+  previewCells=null;
+  gameOver=false;
+  reveal=false;
+  setStatus("📍 Plasează avionul 1 din 3");
+  mySub.textContent="Forma este exact cea din desen. Atinge celula unde vrei să fie vârful avionului.";
+  renderGrid();
+}
+
+document.getElementById("newBtn").addEventListener("click",newGame);
+
+document.getElementById("rotateBtn").addEventListener("click",()=>{
+  if(!placing){ toast("Avioanele sunt deja plasate."); return; }
+  vertical=!vertical;
+  previewCells=null;
+  setStatus(vertical ? "↻ Forma rotită — plasează avionul" : "↻ Forma normală — plasează avionul");
+  renderGrid();
+});
+
+document.getElementById("autoBtn").addEventListener("click",autoPlace);
+
+document.getElementById("revealBtn").addEventListener("click",()=>{
+  reveal=!reveal;
+  renderGrid();
+});
+
+newGame();
+</script>
+</body>
+</html>
