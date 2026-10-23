@@ -132,7 +132,7 @@ button.secondary{background:#29425c}
 
 <p class="help">
   Fiecare avion are 10 celule. Forma este: <b>1-5-1-3</b>.
-  Ai 3 avioane. Câștigi când lovești toate cele 30 de celule.
+  Ai 3 avioane. Câștigi când lovești capetele celor 3 avioane.
 </p>
 </div>
 <div id="toast" class="toast"></div>
@@ -409,11 +409,12 @@ function attack(i){
     toast("💧 Ratat.");
   }
 
-  if([...enemyCells].every(x=>myShots.has(x))){
+  const enemyHeads=new Set(enemyPlanes.map(plane=>plane.head));
+  if([...enemyHeads].every(x=>myShots.has(x))){
     gameOver=true;
-    setStatus("🏆 AI CÂȘTIGAT!");
+    setStatus("🏆 AI-ul a pierdut! Ai câștigat!");
     renderGrid();
-    toast("🏆 Ai distrus toate avioanele!");
+    toast("🏆 Ai lovit cele 3 capete! Ai câștigat!");
     return;
   }
 
@@ -432,11 +433,12 @@ function enemyTurn(){
   enemyShots.add(i);
   const mine=new Set(myPlanes.flat());
 
-  if([...mine].every(x=>enemyShots.has(x))){
+  const myHeads=new Set(myPlanes.map(plane=>plane.head));
+  if([...myHeads].every(x=>enemyShots.has(x))){
     gameOver=true;
     setStatus("💥 AI-ul a câștigat!");
     renderGrid();
-    toast("💥 AI-ul ți-a distrus toate avioanele!");
+    toast("💥 AI-ul ți-a lovit toate cele 3 capete!");
     return;
   }
 
