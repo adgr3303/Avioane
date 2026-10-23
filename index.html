@@ -242,8 +242,11 @@ function renderGrid(){
     });
     b.addEventListener("pointerenter",()=>{
       if(placing){
-        lastAnchor=i;
-        previewCells=cellsForAnchor(i);
+        const next=cellsForAnchor(i);
+        if(validPlacement(next,myPlanes)){
+          lastAnchor=i;
+          previewCells=next;
+        }
         renderMyOnly();
       }
     });
