@@ -172,6 +172,7 @@ let myMarks = Array(100).fill("");
 let markCycle = ["", "miss", "body", "head"];
 let placing = true;
 let planeNo = 0;
+let pendingAnchor = null;
 let orientation = 0;
 let lastAnchor = 44;
 const directionEl = document.getElementById("direction");
@@ -330,6 +331,7 @@ function rotatePlane(anchor=null){
 function setOrientation(next,anchor=null){
   if(!placing){ toast("Avioanele sunt deja plasate."); return; }
   if(anchor!==null) lastAnchor=anchor;
+  pendingAnchor=null;
   orientation=(next+4)%4;
   let cells=cellsForAnchor(lastAnchor);
   if(!validPlacement(cells,myPlanes)){
@@ -359,9 +361,21 @@ function placePlane(anchor){
     return;
   }
 
+  // Primul click alege capul. Un al doilea click pe același cap fixează avionul.
+  // Dacă se alege alt cap, avionul se mută acolo și confirmarea reîncepe.
+  if(pendingAnchor!==anchor){
+    pendingAnchor=anchor;
+    lastAnchor=anchor;
+    previewCells=cells;
+    setStatus("✈️ Avionul "+(planeNo+1)+": apasă același cap încă o dată ca să-l fixezi; altă celulă îl mută.");
+    renderGrid();
+    return;
+  }
+
   cells.head=anchor;
   myPlanes.push(cells);
   planeNo++;
+  pendingAnchor=null;
   previewCells=null;
 
   if(planeNo===3){
@@ -369,7 +383,7 @@ function placePlane(anchor){
     setStatus("🎯 Marchează răspunsurile adversarului");
     mySub.textContent="Atinge celulele după răspunsul adversarului: X alb la ratare, galben la corp, verde la cap.";
   }else{
-    setStatus("📍 Plasează avionul "+(planeNo+1)+" din 3");
+    setStatus("📍 Avionul "+(planeNo+1)+" din 3: apasă o celulă pentru a-l muta, apoi aceeași celulă de cap pentru fixare.");
   }
   renderGrid();
 }
@@ -384,6 +398,7 @@ function autoPlace(){
   }
   myPlanes=result;
   planeNo=3;
+  pendingAnchor=null;
   placing=false;
   previewCells=null;
   setStatus("🎯 Marchează răspunsurile adversarului");
@@ -425,6 +440,7 @@ function newGame(){
   myMarks=Array(100).fill("");
   placing=true;
   planeNo=0;
+  pendingAnchor=null;
   orientation=0;
   lastAnchor=44;
   previewCells=cellsForAnchor(lastAnchor);
