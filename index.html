@@ -117,7 +117,7 @@ button.secondary{background:#29425c}
 
 <section class="panel">
   <h2>🔴 Adversarul</h2>
-  <div class="sub">După ce ai plasat cele 3 avioane, atinge o celulă pentru atac.</div>
+  <div class="sub">Atinge o celulă ca să schimbi culoarea: neutru → galben (corp) → verde (cap) → neutru.</div>
   <div id="enemyGrid" class="grid"></div>
   <div class="coords">A B C D E F G H I J</div>
 </section>
@@ -127,12 +127,12 @@ button.secondary{background:#29425c}
 <div class="buttons">
   <button class="action" id="newBtn">🔄 Joc nou</button>
   <button class="action secondary" id="autoBtn">⚡ Așază automat</button>
-  <button class="action secondary" id="revealBtn">👁 Arată avioanele</button>
+  <button class="action secondary" id="revealBtn">🧹 Șterge marcajele</button>
 </div>
 
 <p class="help">
   Fiecare avion are 10 celule. Forma este: <b>1-5-1-3</b>.
-  Ai 3 avioane. Câștigi când lovești capetele celor 3 avioane.
+  Ai 3 avioane. Pe tabla adversarului, fiecare atingere schimbă celula: neutru → galben (corp) → verde (cap). Câștigi la 3 capete verzi.
 </p>
 </div>
 <div id="toast" class="toast"></div>
@@ -166,9 +166,8 @@ const SHAPE = [
 ];
 
 let myPlanes = [];
-let enemyPlanes = [];
-let myShots = new Set();
-let enemyShots = new Set();
+let enemyMarks = Array(100).fill("");
+let markCycle = ["", "body", "head"];
 let placing = true;
 let planeNo = 0;
 let orientation = 0;
@@ -259,9 +258,6 @@ function randomPlanes(){
 
 function renderGrid(){
   const mine = new Set(myPlanes.flat());
-  const enemy = new Set(enemyPlanes.flat());
-  const enemyHeads = new Set(enemyPlanes.map(plane=>plane.head));
-
   myGrid.innerHTML="";
   enemyGrid.innerHTML="";
 
@@ -271,8 +267,6 @@ function renderGrid(){
     b.type="button";
 
     if(mine.has(i)) b.classList.add("plane");
-    if(enemyShots.has(i)) b.classList.add(mine.has(i) ? "hit" : "miss");
-
     if(placing && previewCells && previewCells.includes(i) && validPlacement(previewCells,myPlanes)){
       b.classList.add("preview");
     }
@@ -300,15 +294,12 @@ function renderGrid(){
     e.className="cell";
     e.type="button";
 
-    if(myShots.has(i)){
-      if(!enemy.has(i)) e.classList.add("miss");
-      else e.classList.add(enemyHeads.has(i) ? "hit-head" : "hit-body");
-    }
-    if(reveal && enemy.has(i) && !myShots.has(i)) e.classList.add("reveal");
+    if(enemyMarks[i]==="body") e.classList.add("hit-body");
+    if(enemyMarks[i]==="head") e.classList.add("hit-head");
 
     e.addEventListener("pointerdown",(ev)=>{
       ev.preventDefault();
-      attack(i);
+      markEnemyCell(i);
     });
     enemyGrid.appendChild(e);
   }
@@ -370,8 +361,8 @@ function placePlane(anchor){
 
   if(planeNo===3){
     placing=false;
-    setStatus("🎯 Rândul tău — atacă!");
-    mySub.textContent="Cele 3 avioane sunt plasate. Acum atacă adversarul.";
+    setStatus("🎯 Marchează răspunsurile adversarului");
+    mySub.textContent="Cele 3 avioane ale tale sunt plasate.";
   }else{
     setStatus("📍 Plasează avionul "+(planeNo+1)+" din 3");
   }
@@ -390,67 +381,27 @@ function autoPlace(){
   planeNo=3;
   placing=false;
   previewCells=null;
-  setStatus("🎯 Rândul tău — atacă!");
-  mySub.textContent="Avioanele au fost așezate automat.";
+  setStatus("🎯 Marchează răspunsurile adversarului");
+  mySub.textContent="Avioanele tale au fost așezate automat.";
   renderGrid();
 }
 
-function attack(i){
-  if(placing){ toast("Mai întâi plasează cele 3 avioane."); return; }
-  if(gameOver || myShots.has(i)) return;
-
-  myShots.add(i);
-  const enemyCells=new Set(enemyPlanes.flat());
-
-  if(enemyCells.has(i)){
-    const headCells=new Set(enemyPlanes.map(plane=>plane.head));
-    toast(headCells.has(i) ? "🟢 Ai lovit capul avionului!" : "🟡 Ai lovit corpul avionului!");
+function markEnemyCell(i){
+  enemyMarks[i]=markCycle[(markCycle.indexOf(enemyMarks[i])+1)%markCycle.length];
+  const heads=enemyMarks.filter(mark=>mark==="head").length;
+  gameOver=heads===3;
+  if(gameOver){
+    setStatus("🏆 Ai marcat toate cele 3 capete! Ai câștigat!");
+    toast("🏆 Ai câștigat!");
   }else{
-    toast("💧 Ratat.");
+    setStatus("Capete verzi: "+heads+" din 3");
   }
-
-  const enemyHeads=new Set(enemyPlanes.map(plane=>plane.head));
-  if([...enemyHeads].every(x=>myShots.has(x))){
-    gameOver=true;
-    setStatus("🏆 AI-ul a pierdut! Ai câștigat!");
-    renderGrid();
-    toast("🏆 Ai lovit cele 3 capete! Ai câștigat!");
-    return;
-  }
-
-  setStatus(enemyCells.has(i) ? "💥 Lovitură! AI-ul răspunde..." : "💧 AI-ul răspunde...");
-  renderGrid();
-  setTimeout(enemyTurn,500);
-}
-
-function enemyTurn(){
-  if(gameOver) return;
-
-  const free=[];
-  for(let i=0;i<100;i++) if(!enemyShots.has(i)) free.push(i);
-  const i=free[Math.floor(Math.random()*free.length)];
-
-  enemyShots.add(i);
-  const mine=new Set(myPlanes.flat());
-
-  const myHeads=new Set(myPlanes.map(plane=>plane.head));
-  if([...myHeads].every(x=>enemyShots.has(x))){
-    gameOver=true;
-    setStatus("💥 AI-ul a câștigat!");
-    renderGrid();
-    toast("💥 AI-ul ți-a lovit toate cele 3 capete!");
-    return;
-  }
-
-  setStatus(mine.has(i) ? "💥 AI-ul te-a lovit!" : "🎯 Rândul tău!");
   renderGrid();
 }
 
 function newGame(){
   myPlanes=[];
-  enemyPlanes=randomPlanes();
-  myShots=new Set();
-  enemyShots=new Set();
+  enemyMarks=Array(100).fill("");
   placing=true;
   planeNo=0;
   orientation=0;
@@ -462,7 +413,6 @@ function newGame(){
     button.setAttribute("aria-pressed",index===0 ? "true" : "false");
   });
   gameOver=false;
-  reveal=false;
   setStatus("📍 Plasează avionul 1 din 3");
   mySub.textContent="Click stânga plasează avionul; click dreapta pe tablă sau „Rotește” îl întoarce succesiv: nord → est → sud → vest. Direcția apare lângă buton.";
   renderGrid();
@@ -476,7 +426,9 @@ document.querySelectorAll(".direction-choice").forEach(button=>button.addEventLi
 document.getElementById("autoBtn").addEventListener("click",autoPlace);
 
 document.getElementById("revealBtn").addEventListener("click",()=>{
-  reveal=!reveal;
+  enemyMarks=Array(100).fill("");
+  gameOver=false;
+  setStatus("Marcajele adversarului au fost șterse.");
   renderGrid();
 });
 
