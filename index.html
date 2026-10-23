@@ -36,10 +36,11 @@ h2{font-size:17px;margin:0 0 3px}
 .cell.hit-body{background:#ffd05a!important;border-color:#fff0a8!important}
 .cell.hit-head{background:#16ad80!important;border-color:#70f0c7!important}
 .cell.hit-body::after,.cell.hit-head::after{color:#081522}
+.cell.hit-head{box-shadow:inset 0 0 0 3px #eafff7}
 .cell.miss{background:#334b63!important}
 .cell.reveal{background:#755a1d!important}
 .cell.hit::after{content:"×";position:absolute;inset:0;display:grid;place-items:center;font-size:20px;font-weight:900}
-.cell.miss::after{content:"•";position:absolute;inset:0;display:grid;place-items:center;font-size:25px}
+.cell.miss::after{content:"×";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:24px;font-weight:900}
 .cell:active{transform:scale(.94)}
 .coords{width:min(100%,560px);margin:3px auto 0;display:grid;grid-template-columns:repeat(10,1fr);text-align:center;color:#718aa2;font-size:9px}
 .my-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
@@ -117,7 +118,7 @@ button.secondary{background:#29425c}
 
 <section class="panel">
   <h2>🔴 Adversarul</h2>
-  <div class="sub">Atinge o celulă ca să schimbi culoarea: neutru → galben (corp) → verde (cap) → neutru.</div>
+  <div class="sub">Atinge repetat: neutru → X alb (ratare) → galben (corp) → verde (cap) → neutru.</div>
   <div id="enemyGrid" class="grid"></div>
   <div class="coords">A B C D E F G H I J</div>
 </section>
@@ -167,7 +168,8 @@ const SHAPE = [
 
 let myPlanes = [];
 let enemyMarks = Array(100).fill("");
-let markCycle = ["", "body", "head"];
+let myMarks = Array(100).fill("");
+let markCycle = ["", "miss", "body", "head"];
 let placing = true;
 let planeNo = 0;
 let orientation = 0;
@@ -267,6 +269,7 @@ function renderGrid(){
     b.type="button";
 
     if(mine.has(i)) b.classList.add("plane");
+    applyMarkClass(b,myMarks[i]);
     if(placing && previewCells && previewCells.includes(i) && validPlacement(previewCells,myPlanes)){
       b.classList.add("preview");
     }
@@ -274,7 +277,10 @@ function renderGrid(){
     b.addEventListener("contextmenu",(e)=>e.preventDefault());
     b.addEventListener("pointerdown",(e)=>{
       e.preventDefault();
-      if(!placing) return;
+      if(!placing){
+        if(e.button===0) markMyCell(i);
+        return;
+      }
       if(e.button===2){ rotatePlane(i); return; }
       if(e.button===0) placePlane(i);
     });
@@ -294,8 +300,7 @@ function renderGrid(){
     e.className="cell";
     e.type="button";
 
-    if(enemyMarks[i]==="body") e.classList.add("hit-body");
-    if(enemyMarks[i]==="head") e.classList.add("hit-head");
+    applyMarkClass(e,enemyMarks[i]);
 
     e.addEventListener("pointerdown",(ev)=>{
       ev.preventDefault();
@@ -362,7 +367,7 @@ function placePlane(anchor){
   if(planeNo===3){
     placing=false;
     setStatus("🎯 Marchează răspunsurile adversarului");
-    mySub.textContent="Cele 3 avioane ale tale sunt plasate.";
+    mySub.textContent="Atinge celulele după răspunsul adversarului: X alb la ratare, galben la corp, verde la cap.";
   }else{
     setStatus("📍 Plasează avionul "+(planeNo+1)+" din 3");
   }
@@ -386,8 +391,23 @@ function autoPlace(){
   renderGrid();
 }
 
+function applyMarkClass(cell,mark){
+  if(mark==="miss") cell.classList.add("miss");
+  if(mark==="body") cell.classList.add("hit-body");
+  if(mark==="head") cell.classList.add("hit-head");
+}
+
+function nextMark(current){
+  return markCycle[(markCycle.indexOf(current)+1)%markCycle.length];
+}
+
+function markMyCell(i){
+  myMarks[i]=nextMark(myMarks[i]);
+  renderGrid();
+}
+
 function markEnemyCell(i){
-  enemyMarks[i]=markCycle[(markCycle.indexOf(enemyMarks[i])+1)%markCycle.length];
+  enemyMarks[i]=nextMark(enemyMarks[i]);
   const heads=enemyMarks.filter(mark=>mark==="head").length;
   gameOver=heads===3;
   if(gameOver){
@@ -402,6 +422,7 @@ function markEnemyCell(i){
 function newGame(){
   myPlanes=[];
   enemyMarks=Array(100).fill("");
+  myMarks=Array(100).fill("");
   placing=true;
   planeNo=0;
   orientation=0;
@@ -427,6 +448,7 @@ document.getElementById("autoBtn").addEventListener("click",autoPlace);
 
 document.getElementById("revealBtn").addEventListener("click",()=>{
   enemyMarks=Array(100).fill("");
+  myMarks=Array(100).fill("");
   gameOver=false;
   setStatus("Marcajele adversarului au fost șterse.");
   renderGrid();
