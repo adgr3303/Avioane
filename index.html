@@ -317,7 +317,17 @@ function renderGrid(){
     });
     enemyGrid.appendChild(e);
   }
+  syncRowCoords();
 }
+
+function syncRowCoords(){
+  document.querySelectorAll(".board-layout").forEach(layout=>{
+    const grid=layout.querySelector(".grid");
+    const labels=layout.querySelector(".row-coords");
+    if(grid && labels) labels.style.height=grid.offsetHeight+"px";
+  });
+}
+window.addEventListener("resize",syncRowCoords);
 
 function renderMyOnly(){
   const mine=new Set(myPlanes.flat());
