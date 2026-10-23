@@ -128,7 +128,7 @@ function attack(i){
  if(placement||over||myShots.has(i))return;
  myShots.add(i);
  const hit=flat(enemyPlanes).includes(i);beep(hit?780:220,.1);
- if(flat(enemyPlanes).every(c=>myShots.has(c))){finish(true);return}
+ if(enemyPlanes.length===3 && flat(enemyPlanes).length===9 && flat(enemyPlanes).every(c=>myShots.has(c))){finish(true);return}
  status(hit?"💥 Lovitură! AI-ul răspunde...":"💧 Ratat. AI-ul răspunde...");
  draw();setTimeout(enemyTurn,420);
 }
@@ -143,7 +143,7 @@ function enemyTurn(){
  const i=(targets.length?targets:candidates)[Math.floor(Math.random()*(targets.length?targets.length:candidates.length))];
  enemyShots.add(i);
  const hit=flat(myPlanes).includes(i);beep(hit?360:150,.1);
- if(flat(myPlanes).every(c=>enemyShots.has(c))){finish(false);return}
+ if(myPlanes.length===3 && flat(myPlanes).length===9 && flat(myPlanes).every(c=>enemyShots.has(c))){finish(false);return}
  status(hit?"💥 AI-ul te-a lovit!":"💧 AI-ul a ratat. Rândul tău!");
  draw();
 }
@@ -157,7 +157,9 @@ function finish(win){
  draw();
 }
 function newGame(){
- myPlanes=[];enemyPlanes=makePlanes();myShots=new Set();enemyShots=new Set();
+ myPlanes=[];enemyPlanes=makePlanes();
+ if(enemyPlanes.length!==3){enemyPlanes=[[0,1,2],[30,40,50],[77,78,79]];}
+myShots=new Set();enemyShots=new Set();
  placement=true;placeIndex=0;vertical=false;over=false;reveal=false;
  $("overlay").classList.add("hidden");$("mySub").textContent="Atinge o celulă pentru avionul 1. Folosește ↻ pentru rotire.";
  status("📍 Plasează avionul 1 din 3");draw();
