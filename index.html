@@ -328,7 +328,12 @@ function syncRowCoords(){
   document.querySelectorAll(".board-layout").forEach(layout=>{
     const grid=layout.querySelector(".grid");
     const labels=layout.querySelector(".row-coords");
-    if(grid && labels) labels.style.height=grid.offsetHeight+"px";
+    const topLabels=layout.querySelector(".coords");
+    if(grid && labels){
+      const topOffset=topLabels ? topLabels.offsetHeight + parseFloat(getComputedStyle(topLabels).marginBottom || 0) : 0;
+      labels.style.marginTop=topOffset+"px";
+      labels.style.height=grid.offsetHeight+"px";
+    }
   });
 }
 window.addEventListener("resize",syncRowCoords);
