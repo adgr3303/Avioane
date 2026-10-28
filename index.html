@@ -292,8 +292,13 @@ function showOnlinePanel(message){
 function attachConnection(conn){
   connection=conn;
   conn.on("open",()=>{
-    setOnlineStatus("Conectat! Așezați avioanele și apăsați „Sunt gata”.");
+    if(placing) autoPlace();
+    localReady=true;
     sendOnline({type:"hello",role:onlineRole});
+    sendOnline({type:"ready"});
+    setStatus("✅ Avioanele sunt pregătite. Se pornește jocul…");
+    setOnlineStatus("Conectat. Avioanele au fost așezate automat; începe primul jucător.");
+    maybeStartOnlineGame();
     updateOnlineControls();
   });
   conn.on("data",handleOnlineMessage);
@@ -448,7 +453,8 @@ function handleOnlineMessage(message){
     onlineStarted=true;
     myTurn=false;
     setStatus("🎯 Joc început — rândul adversarului.");
-    setOnlineStatus("Joc început. Aștepți atacul adversarului.");
+    setOnlineStatus("Joc început. Gazda începe; după aceea se alternează turele.");
+    renderGrid();
     return;
   }
   if(message.type==="attack"){
