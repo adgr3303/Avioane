@@ -52,8 +52,7 @@ button.rotate-inline{min-height:36px;padding:6px 12px;white-space:nowrap}.direct
 [hidden]{display:none!important}
 .online-panel{margin-top:6px;padding:8px;background:#10263d;border:1px solid #294a67;border-radius:12px;display:grid;gap:6px}
 .online-status{font-size:12px;color:var(--muted);line-height:1.3}
-.online-controls{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center}
-.online-controls input{width:100%;min-width:0;height:40px;border:1px solid #42617d;border-radius:9px;background:#081522;color:var(--text);padding:5px 8px;font-size:12px}
+.online-controls{display:grid;grid-template-columns:1fr;gap:6px;align-items:center}
 .online-controls button{min-height:40px;padding:5px 10px;font-size:12px;white-space:nowrap}
 .cell:disabled{cursor:not-allowed;opacity:.72}
 button.action{
@@ -103,12 +102,11 @@ button.secondary{background:#29425c}
   .online-panel{margin-top:4px;padding:5px 6px;gap:4px}
   .online-status{font-size:9px;line-height:1.1}
   .online-controls{gap:4px}
-  .online-controls input{height:31px;padding:3px 5px;font-size:9px}
   .online-controls button{min-height:31px;padding:3px 5px;font-size:9px}
   .help{display:none}
 }
 @media(max-width:380px){
-  .online-controls{grid-template-columns:minmax(0,1fr) auto}
+  .online-controls{grid-template-columns:1fr}
   #readyBtn{grid-column:1/-1}
   .my-heading h2{font-size:12px}
   .my-heading{gap:2px}
@@ -158,14 +156,11 @@ button.secondary{background:#29425c}
   <button class="action" id="newBtn">🔄 Joc nou</button>
   <button class="action secondary" id="autoBtn">⚡ Așază automat</button>
   <button class="action secondary" id="revealBtn">🧹 Șterge marcajele</button>
-  <button class="action secondary" id="inviteBtn">🔗 Invită un prieten</button>
 </div>
 
 <div id="onlinePanel" class="online-panel" hidden>
   <div id="onlineStatus" class="online-status">Pregătesc jocul online…</div>
   <div class="online-controls">
-    <input id="inviteLink" type="url" readonly aria-label="Link de invitație" hidden>
-    <button id="copyInviteBtn" class="action secondary" type="button" hidden>📋 Copiază linkul</button>
     <button id="readyBtn" class="action" type="button" hidden>✅ Sunt gata</button>
   </div>
 </div>
@@ -235,11 +230,8 @@ const enemyGrid = document.getElementById("enemyGrid");
 const statusEl = document.getElementById("status");
 const mySub = document.getElementById("mySub");
 const toastEl = document.getElementById("toast");
-const inviteBtn = document.getElementById("inviteBtn");
 const onlinePanel = document.getElementById("onlinePanel");
 const onlineStatus = document.getElementById("onlineStatus");
-const inviteLink = document.getElementById("inviteLink");
-const copyInviteBtn = document.getElementById("copyInviteBtn");
 const readyBtn = document.getElementById("readyBtn");
 
 function toast(msg){
@@ -252,7 +244,6 @@ function setStatus(msg){ statusEl.textContent = msg; }
 function setOnlineStatus(msg){ onlineStatus.textContent=msg; }
 
 function updateOnlineControls(){
-  inviteBtn.disabled=onlineMode;
   document.getElementById("autoBtn").disabled=onlineMode && (localReady || onlineStarted);
   document.getElementById("revealBtn").disabled=onlineMode;
   readyBtn.hidden=!(onlineMode && connection && connection.open && !placing && !localReady && !onlineStarted);
@@ -280,10 +271,6 @@ function resetOnline(removeJoin){
   peer=null;
   onlinePanel.hidden=true;
   document.body.classList.remove("online-mode");
-  inviteBtn.disabled=false;
-  inviteLink.value="";
-  inviteLink.hidden=true;
-  copyInviteBtn.hidden=true;
   readyBtn.hidden=true;
   document.getElementById("autoBtn").disabled=false;
   document.getElementById("revealBtn").disabled=false;
@@ -302,12 +289,6 @@ function showOnlinePanel(message){
   setOnlineStatus(message);
 }
 
-function permanentInviteUrl(){
-  const url=new URL(location.origin+location.pathname);
-  url.searchParams.set("join",PERMANENT_ROOM_ID);
-  return url.toString();
-}
-
 function attachConnection(conn){
   connection=conn;
   conn.on("open",()=>{
@@ -324,7 +305,6 @@ function attachConnection(conn){
     onlineStarted=false;
     myTurn=false;
     pendingAttack=null;
-    inviteBtn.disabled=false;
     setOnlineStatus("Adversarul s-a deconectat. Retrimite invitația sau pornește un joc nou.");
     setStatus("Conexiunea cu adversarul s-a întrerupt.");
     updateOnlineControls();
@@ -352,13 +332,8 @@ function startOnline(role,targetPeerId=null){
   enemyMarks=Array(100).fill("");
   myMarks=Array(100).fill("");
   gameOver=false;
-  inviteBtn.disabled=true;
-  inviteLink.value=permanentInviteUrl();
-  inviteLink.hidden=false;
-  copyInviteBtn.hidden=false;
   showOnlinePanel(automatic ? "Pornește jocul…" : role==="host" ? "Pornește jocul online…" : "Mă conectez la joc…");
-  if(automatic) setOnlineStatus("Același link este pentru amândoi. Aștept să intri în joc…");
-  else if(role==="host") setOnlineStatus("Trimite linkul prietenului și ține pagina deschisă.");
+  if(automatic) setOnlineStatus("Primul jucător pornește jocul; al doilea intră automat de pe aceeași pagină.");
   let fallbackStarted=false;
 
   function connectAsGuest(peerInstance,targetId){
@@ -371,10 +346,9 @@ function startOnline(role,targetPeerId=null){
     peerInstance.on("error",error=>{
       if(peer!==peerInstance) return;
       const message=error.type==="peer-unavailable"
-        ? "Nu găsesc gazda. Roag-o să deschidă linkul prima."
+        ? "Nu găsesc încă jocul. Primul jucător trebuie să deschidă pagina principală și să o lase deschisă."
         : "Conexiunea s-a întrerupt. Reîncarcă pagina și încearcă din nou.";
       setOnlineStatus(message);
-      inviteBtn.disabled=false;
     });
   }
 
@@ -384,7 +358,7 @@ function startOnline(role,targetPeerId=null){
     peer=hostPeer;
     hostPeer.on("open",()=>{
       if(peer!==hostPeer) return;
-      setOnlineStatus("Jocul este pornit. Prietenul tău trebuie să deschidă același link.");
+      setOnlineStatus("Joc pornit. Al doilea jucător intră automat de pe pagina principală.");
       updateOnlineControls();
     });
     hostPeer.on("connection",conn=>{
@@ -406,8 +380,7 @@ function startOnline(role,targetPeerId=null){
         ? "Jocul este deja deschis în altă filă. Închide-l sau deschide linkul pentru a intra ca al doilea jucător."
         : "Nu s-a putut porni jocul. Verifică internetul și reîncarcă pagina.";
       setOnlineStatus(message);
-      inviteBtn.disabled=false;
-      updateOnlineControls();
+          updateOnlineControls();
     });
   }
 
@@ -828,19 +801,6 @@ document.getElementById("revealBtn").addEventListener("click",()=>{
   renderGrid();
 });
 
-inviteBtn.addEventListener("click",()=>startOnline("host"));
-copyInviteBtn.addEventListener("click",async()=>{
-  if(!inviteLink.value) return;
-  try{
-    await navigator.clipboard.writeText(inviteLink.value);
-    toast("📋 Linkul invitației a fost copiat.");
-  }catch(_){
-    inviteLink.focus();
-    inviteLink.select();
-    document.execCommand("copy");
-    toast("Selectează și copiază linkul invitației.");
-  }
-});
 readyBtn.addEventListener("click",()=>{
   if(placing || !connection || !connection.open) return;
   localReady=true;
@@ -851,9 +811,8 @@ readyBtn.addEventListener("click",()=>{
   updateOnlineControls();
 });
 
-const invitePeerId=new URLSearchParams(location.search).get("join");
 newGame();
-if(invitePeerId) startOnline(invitePeerId===PERMANENT_ROOM_ID ? "auto" : "guest",invitePeerId);
+startOnline("auto");
 </script>
 </body>
 </html>
