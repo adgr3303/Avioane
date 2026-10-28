@@ -292,13 +292,10 @@ function showOnlinePanel(message){
 function attachConnection(conn){
   connection=conn;
   conn.on("open",()=>{
-    if(placing) autoPlace();
-    localReady=true;
     sendOnline({type:"hello",role:onlineRole});
-    sendOnline({type:"ready"});
-    setStatus("✅ Avioanele sunt pregătite. Se pornește jocul…");
-    setOnlineStatus("Conectat. Avioanele au fost așezate automat; începe primul jucător.");
-    maybeStartOnlineGame();
+    setOnlineStatus(onlineRole==="host"
+      ? "Conectat. Așază-ți avioanele și apasă „Sunt gata”. Tu începi primul."
+      : "Conectat. Așază-ți avioanele și apasă „Sunt gata”. Gazda începe prima.");
     updateOnlineControls();
   });
   conn.on("data",handleOnlineMessage);
@@ -439,12 +436,14 @@ function handleIncomingAttack(cell){
 function handleOnlineMessage(message){
   if(!message || typeof message.type!=="string") return;
   if(message.type==="hello"){
-    setOnlineStatus("Adversarul s-a conectat. Așezați avioanele și apăsați „Sunt gata”.");
+    setOnlineStatus(onlineRole==="host"
+      ? "Adversarul s-a conectat. Așezați-vă avioanele; tu vei începe după ce amândoi apăsați „Sunt gata”."
+      : "Gazda s-a conectat. Așază-ți avioanele; gazda va începe după ce amândoi apăsați „Sunt gata”.");
     return;
   }
   if(message.type==="ready"){
     remoteReady=true;
-    setOnlineStatus(localReady ? "Amândoi sunteți gata. Pregătesc jocul…" : "Adversarul este gata. Apasă „Sunt gata” când ai terminat.");
+    setOnlineStatus(localReady ? "Amândoi sunteți gata. Gazda începe acum." : "Adversarul este gata. Termină așezarea și apasă „Sunt gata”.");
     maybeStartOnlineGame();
     return;
   }
