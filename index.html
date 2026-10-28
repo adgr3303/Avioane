@@ -436,7 +436,7 @@ function maybeStartOnlineGame(){
 }
 
 function handleIncomingAttack(cell){
-  if(!Number.isInteger(cell) || cell<0 || cell>=100 || !onlineStarted || myTurn || gameOver || myMarks[cell]) return;
+  if(!Number.isInteger(cell) || cell<0 || cell>=100 || !onlineStarted || gameOver || myMarks[cell]) return;
   let mark="miss";
   for(const plane of myPlanes){
     if(plane.includes(cell)){
