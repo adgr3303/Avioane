@@ -49,6 +49,13 @@ h2{font-size:17px;margin:0 0 3px}
 .my-heading h2{margin:0}
 button.rotate-inline{min-height:36px;padding:6px 12px;white-space:nowrap}.direction{min-width:76px;text-align:center;color:#ffd05a;font-size:13px;font-weight:900}.direction-controls{display:flex;gap:3px}.direction-choice{width:28px;height:28px;padding:0;border:1px solid #42617d;border-radius:7px;background:#193652;color:#d7e4f0;font-size:16px;font-weight:900}.direction-choice.active{background:#5c4c20;border-color:#ffd05a;color:#ffd05a}
 .buttons{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+[hidden]{display:none!important}
+.online-panel{margin-top:6px;padding:8px;background:#10263d;border:1px solid #294a67;border-radius:12px;display:grid;gap:6px}
+.online-status{font-size:12px;color:var(--muted);line-height:1.3}
+.online-controls{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center}
+.online-controls input{width:100%;min-width:0;height:40px;border:1px solid #42617d;border-radius:9px;background:#081522;color:var(--text);padding:5px 8px;font-size:12px}
+.online-controls button{min-height:40px;padding:5px 10px;font-size:12px;white-space:nowrap}
+.cell:disabled{cursor:not-allowed;opacity:.72}
 button.action{
   min-height:48px;border:0;border-radius:12px;background:var(--blue);
   color:white;font-size:14px;font-weight:900
@@ -86,15 +93,23 @@ button.secondary{background:#29425c}
   button.rotate-inline{min-height:27px;padding:3px 4px;font-size:10px;flex:none}
   .sub{font-size:9px;line-height:1.1;margin-bottom:2px;flex:none}
   .board-layout{flex:1;min-height:0;width:min(100%,max(0px,calc((100svh - 315px)/2 + 22px)));grid-template-columns:15px minmax(0,1fr);gap:3px}
+  body.online-mode .board-layout{width:min(100%,max(0px,calc((100svh - 375px)/2 + 22px)))}
   .row-coords{gap:2px;font-size:8px}
   .grid{width:100%;gap:2px;margin:0}
   .cell{border-radius:3px}
   .coords{font-size:8px;margin:0 0 2px;flex:none}
   .buttons{flex:none;gap:4px}
   button.action{min-height:33px;font-size:10px;border-radius:7px}
+  .online-panel{margin-top:4px;padding:5px 6px;gap:4px}
+  .online-status{font-size:9px;line-height:1.1}
+  .online-controls{gap:4px}
+  .online-controls input{height:31px;padding:3px 5px;font-size:9px}
+  .online-controls button{min-height:31px;padding:3px 5px;font-size:9px}
   .help{display:none}
 }
 @media(max-width:380px){
+  .online-controls{grid-template-columns:minmax(0,1fr) auto}
+  #readyBtn{grid-column:1/-1}
   .my-heading h2{font-size:12px}
   .my-heading{gap:2px}
   .my-heading>div{gap:2px!important}
@@ -143,6 +158,16 @@ button.secondary{background:#29425c}
   <button class="action" id="newBtn">🔄 Joc nou</button>
   <button class="action secondary" id="autoBtn">⚡ Așază automat</button>
   <button class="action secondary" id="revealBtn">🧹 Șterge marcajele</button>
+  <button class="action secondary" id="inviteBtn">🔗 Invită un prieten</button>
+</div>
+
+<div id="onlinePanel" class="online-panel" hidden>
+  <div id="onlineStatus" class="online-status">Pregătesc jocul online…</div>
+  <div class="online-controls">
+    <input id="inviteLink" type="url" readonly aria-label="Link de invitație" hidden>
+    <button id="copyInviteBtn" class="action secondary" type="button" hidden>📋 Copiază linkul</button>
+    <button id="readyBtn" class="action" type="button" hidden>✅ Sunt gata</button>
+  </div>
 </div>
 
 <p class="help">
@@ -152,6 +177,7 @@ button.secondary{background:#29425c}
 </div>
 <div id="toast" class="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <script>
 "use strict";
 
@@ -193,12 +219,27 @@ const directionEl = document.getElementById("direction");
 let gameOver = false;
 let reveal = false;
 let previewCells = null;
+let peer = null;
+let connection = null;
+let onlineMode = false;
+let onlineRole = null;
+let localReady = false;
+let remoteReady = false;
+let onlineStarted = false;
+let myTurn = false;
+let pendingAttack = null;
 
 const myGrid = document.getElementById("myGrid");
 const enemyGrid = document.getElementById("enemyGrid");
 const statusEl = document.getElementById("status");
 const mySub = document.getElementById("mySub");
 const toastEl = document.getElementById("toast");
+const inviteBtn = document.getElementById("inviteBtn");
+const onlinePanel = document.getElementById("onlinePanel");
+const onlineStatus = document.getElementById("onlineStatus");
+const inviteLink = document.getElementById("inviteLink");
+const copyInviteBtn = document.getElementById("copyInviteBtn");
+const readyBtn = document.getElementById("readyBtn");
 
 function toast(msg){
   toastEl.textContent = msg;
@@ -207,6 +248,216 @@ function toast(msg){
   window.__toast = setTimeout(()=>toastEl.style.display="none",1400);
 }
 function setStatus(msg){ statusEl.textContent = msg; }
+function setOnlineStatus(msg){ onlineStatus.textContent=msg; }
+
+function updateOnlineControls(){
+  inviteBtn.disabled=onlineMode;
+  document.getElementById("autoBtn").disabled=onlineMode && (localReady || onlineStarted);
+  document.getElementById("revealBtn").disabled=onlineMode;
+  readyBtn.hidden=!(onlineMode && connection && connection.open && !placing && !localReady && !onlineStarted);
+}
+
+function sendOnline(message){
+  if(connection && connection.open){
+    connection.send(message);
+    return true;
+  }
+  return false;
+}
+
+function resetOnline(removeJoin){
+  const oldConnection=connection;
+  const oldPeer=peer;
+  onlineMode=false;
+  onlineRole=null;
+  localReady=false;
+  remoteReady=false;
+  onlineStarted=false;
+  myTurn=false;
+  pendingAttack=null;
+  connection=null;
+  peer=null;
+  onlinePanel.hidden=true;
+  document.body.classList.remove("online-mode");
+  inviteBtn.disabled=false;
+  inviteLink.value="";
+  inviteLink.hidden=true;
+  copyInviteBtn.hidden=true;
+  readyBtn.hidden=true;
+  document.getElementById("autoBtn").disabled=false;
+  document.getElementById("revealBtn").disabled=false;
+  if(oldConnection) oldConnection.close();
+  if(oldPeer && !oldPeer.destroyed) oldPeer.destroy();
+  if(removeJoin){
+    const url=new URL(location.href);
+    url.searchParams.delete("join");
+    history.replaceState(null,"",url);
+  }
+}
+
+function showOnlinePanel(message){
+  document.body.classList.add("online-mode");
+  onlinePanel.hidden=false;
+  setOnlineStatus(message);
+}
+
+function attachConnection(conn){
+  connection=conn;
+  conn.on("open",()=>{
+    setOnlineStatus("Conectat! Așezați avioanele și apăsați „Sunt gata”.");
+    sendOnline({type:"hello",role:onlineRole});
+    updateOnlineControls();
+  });
+  conn.on("data",handleOnlineMessage);
+  conn.on("close",()=>{
+    if(!onlineMode) return;
+    connection=null;
+    onlineStarted=false;
+    myTurn=false;
+    setOnlineStatus("Conexiunea s-a întrerupt. Creează o invitație nouă.");
+    setStatus("Conexiunea cu adversarul s-a întrerupt.");
+    updateOnlineControls();
+  });
+  conn.on("error",()=>{
+    if(onlineMode) setOnlineStatus("Nu s-a putut menține conexiunea. Încearcă o invitație nouă.");
+  });
+}
+
+function startOnline(role,targetPeerId=null){
+  if(typeof Peer!=="function"){
+    showOnlinePanel("Conexiunea online nu s-a încărcat. Verifică internetul și reîncarcă pagina.");
+    return;
+  }
+  onlineMode=true;
+  onlineRole=role;
+  localReady=false;
+  remoteReady=false;
+  onlineStarted=false;
+  myTurn=false;
+  pendingAttack=null;
+  enemyMarks=Array(100).fill("");
+  myMarks=Array(100).fill("");
+  gameOver=false;
+  inviteBtn.disabled=true;
+  inviteLink.hidden=true;
+  copyInviteBtn.hidden=true;
+  showOnlinePanel(role==="host" ? "Creez invitația online…" : "Mă conectez la joc…");
+  peer=new Peer();
+  peer.on("open",id=>{
+    if(role==="host"){
+      const url=new URL(location.href);
+      url.searchParams.set("join",id);
+      inviteLink.value=url.toString();
+      inviteLink.hidden=false;
+      copyInviteBtn.hidden=false;
+      setOnlineStatus("Trimite linkul prietenului. Jocul începe după ce amândoi apăsați „Sunt gata”.");
+      updateOnlineControls();
+    }else{
+      setOnlineStatus("Am găsit jocul. Se stabilește conexiunea…");
+      attachConnection(peer.connect(targetPeerId,{reliable:true}));
+    }
+  });
+  if(role==="host"){
+    peer.on("connection",conn=>{
+      if(connection && connection.open){
+        conn.close();
+        return;
+      }
+      attachConnection(conn);
+    });
+  }
+  peer.on("error",error=>{
+    const messages={
+      "peer-unavailable":"Invitația nu mai este activă. Roagă gazda să creeze un link nou.",
+      "network":"Conexiunea la internet s-a întrerupt. Verifică rețeaua și încearcă din nou.",
+      "unavailable-id":"Nu s-a putut crea invitația. Încearcă din nou."
+    };
+    setOnlineStatus(messages[error.type] || "Nu s-a putut porni jocul online. Reîncarcă pagina și încearcă din nou.");
+    updateOnlineControls();
+  });
+}
+
+function maybeStartOnlineGame(){
+  if(!localReady || !remoteReady || onlineStarted) return;
+  if(onlineRole==="host"){
+    onlineStarted=true;
+    myTurn=true;
+    sendOnline({type:"start"});
+    setStatus("🎯 Joc început — rândul tău.");
+    setOnlineStatus("Joc început. Atacă o celulă din cadranul adversarului.");
+  }else{
+    setOnlineStatus("Amândoi sunteți gata. Așteaptă gazda să pornească jocul…");
+  }
+  updateOnlineControls();
+}
+
+function handleIncomingAttack(cell){
+  if(!Number.isInteger(cell) || cell<0 || cell>=100 || !onlineStarted || myTurn || gameOver || myMarks[cell]) return;
+  let mark="miss";
+  for(const plane of myPlanes){
+    if(plane.includes(cell)){
+      mark=plane.head===cell ? "head" : "body";
+      break;
+    }
+  }
+  myMarks[cell]=mark;
+  const defeated=myPlanes.filter(plane=>myMarks[plane.head]==="head").length===3;
+  sendOnline({type:"result",cell,mark,defeated});
+  if(defeated){
+    gameOver=true;
+    myTurn=false;
+    setStatus("💥 Adversarul a lovit toate cele 3 capete. Ai pierdut.");
+  }else{
+    myTurn=true;
+    setStatus(mark==="miss" ? "❌ Adversarul a ratat. Rândul tău." : mark==="head" ? "🎯 Cap lovit! Rândul tău." : "💥 Corp lovit. Rândul tău.");
+  }
+  renderGrid();
+}
+
+function handleOnlineMessage(message){
+  if(!message || typeof message.type!=="string") return;
+  if(message.type==="hello"){
+    setOnlineStatus("Adversarul s-a conectat. Așezați avioanele și apăsați „Sunt gata”.");
+    return;
+  }
+  if(message.type==="ready"){
+    remoteReady=true;
+    setOnlineStatus(localReady ? "Amândoi sunteți gata. Pregătesc jocul…" : "Adversarul este gata. Apasă „Sunt gata” când ai terminat.");
+    maybeStartOnlineGame();
+    return;
+  }
+  if(message.type==="start"){
+    if(onlineRole!=="guest" || !localReady || !remoteReady) return;
+    onlineStarted=true;
+    myTurn=false;
+    setStatus("🎯 Joc început — rândul adversarului.");
+    setOnlineStatus("Joc început. Aștepți atacul adversarului.");
+    return;
+  }
+  if(message.type==="attack"){
+    handleIncomingAttack(message.cell);
+    return;
+  }
+  if(message.type==="result"){
+    if(pendingAttack!==message.cell || !["miss","body","head"].includes(message.mark)) return;
+    enemyMarks[message.cell]=message.mark;
+    pendingAttack=null;
+    const won=message.defeated || enemyMarks.filter(mark=>mark==="head").length===3;
+    if(won){
+      gameOver=true;
+      myTurn=false;
+      setStatus("🏆 Ai lovit toate cele 3 capete! Ai câștigat!");
+      setOnlineStatus("Joc terminat — ai câștigat!");
+      toast("🏆 Ai câștigat!");
+    }else{
+      myTurn=false;
+      const messageText=message.mark==="miss" ? "Ratare" : message.mark==="head" ? "Cap lovit!" : "Corp lovit.";
+      setStatus(messageText+" Rândul adversarului.");
+      setOnlineStatus("Aștepți următoarea tură a adversarului.");
+    }
+    renderGrid();
+  }
+}
 
 function rotate90(shape){
   const h = shape.length, w = shape[0].length;
@@ -294,7 +545,7 @@ function renderGrid(){
     b.addEventListener("pointerdown",(e)=>{
       e.preventDefault();
       if(!placing){
-        if(e.button===0) markMyCell(i);
+        if(!onlineMode && e.button===0) markMyCell(i);
         return;
       }
       if(e.button===2){ rotatePlane(i); return; }
@@ -317,10 +568,13 @@ function renderGrid(){
     e.type="button";
 
     applyMarkClass(e,enemyMarks[i]);
+    if(pendingAttack===i) e.classList.add("preview");
+    const canAttack=onlineMode && connection && connection.open && onlineStarted && myTurn && pendingAttack===null && !gameOver;
+    if(onlineMode && (!canAttack || enemyMarks[i])) e.disabled=true;
 
     e.addEventListener("pointerdown",(ev)=>{
       ev.preventDefault();
-      markEnemyCell(i);
+      attackCell(i);
     });
     enemyGrid.appendChild(e);
   }
@@ -415,8 +669,14 @@ function placePlane(anchor){
 
   if(planeNo===3){
     placing=false;
-    setStatus("🎯 Marchează răspunsurile adversarului");
-    mySub.textContent="Atinge celulele după răspunsul adversarului: X alb la ratare, galben la corp, verde la cap.";
+    if(onlineMode){
+      setStatus("✅ Avioanele sunt plasate. Pregătește-te de joc.");
+      mySub.textContent="Apasă „Sunt gata” când ești pregătit. Pozițiile avioanelor tale rămân secrete.";
+    }else{
+      setStatus("🎯 Marchează răspunsurile adversarului");
+      mySub.textContent="Atinge celulele după răspunsul adversarului: X alb la ratare, galben la corp, verde la cap.";
+    }
+    updateOnlineControls();
   }else{
     setStatus("📍 Avionul "+(planeNo+1)+" din 3: apasă o celulă pentru a-l muta, apoi aceeași celulă de cap pentru fixare.");
   }
@@ -436,8 +696,14 @@ function autoPlace(){
   pendingAnchor=null;
   placing=false;
   previewCells=null;
-  setStatus("🎯 Marchează răspunsurile adversarului");
-  mySub.textContent="Avioanele tale au fost așezate automat.";
+  if(onlineMode){
+    setStatus("✅ Avioanele sunt plasate. Pregătește-te de joc.");
+    mySub.textContent="Apasă „Sunt gata” când ești pregătit. Pozițiile avioanelor tale rămân secrete.";
+  }else{
+    setStatus("🎯 Marchează răspunsurile adversarului");
+    mySub.textContent="Avioanele tale au fost așezate automat.";
+  }
+  updateOnlineControls();
   renderGrid();
 }
 
@@ -456,6 +722,18 @@ function markMyCell(i){
   renderGrid();
 }
 
+function attackCell(i){
+  if(!onlineMode){
+    markEnemyCell(i);
+    return;
+  }
+  if(!connection || !connection.open || !onlineStarted || !myTurn || gameOver || pendingAttack!==null || enemyMarks[i]) return;
+  pendingAttack=i;
+  sendOnline({type:"attack",cell:i});
+  setStatus("Atac la "+String.fromCharCode(65+i%10)+(Math.floor(i/10)+1)+" — așteaptă răspunsul.");
+  renderGrid();
+}
+
 function markEnemyCell(i){
   enemyMarks[i]=nextMark(enemyMarks[i]);
   const heads=enemyMarks.filter(mark=>mark==="head").length;
@@ -470,6 +748,7 @@ function markEnemyCell(i){
 }
 
 function newGame(){
+  resetOnline(onlineMode);
   myPlanes=[];
   enemyMarks=Array(100).fill("");
   myMarks=Array(100).fill("");
@@ -505,7 +784,32 @@ document.getElementById("revealBtn").addEventListener("click",()=>{
   renderGrid();
 });
 
+inviteBtn.addEventListener("click",()=>startOnline("host"));
+copyInviteBtn.addEventListener("click",async()=>{
+  if(!inviteLink.value) return;
+  try{
+    await navigator.clipboard.writeText(inviteLink.value);
+    toast("📋 Linkul invitației a fost copiat.");
+  }catch(_){
+    inviteLink.focus();
+    inviteLink.select();
+    document.execCommand("copy");
+    toast("Selectează și copiază linkul invitației.");
+  }
+});
+readyBtn.addEventListener("click",()=>{
+  if(placing || !connection || !connection.open) return;
+  localReady=true;
+  readyBtn.hidden=true;
+  sendOnline({type:"ready"});
+  setOnlineStatus(remoteReady ? "Amândoi sunteți gata. Pregătesc jocul…" : "Ești gata. Așteaptă ca adversarul să fie gata.");
+  maybeStartOnlineGame();
+  updateOnlineControls();
+});
+
+const invitePeerId=new URLSearchParams(location.search).get("join");
 newGame();
+if(invitePeerId) startOnline("guest",invitePeerId);
 </script>
 </body>
 </html>
