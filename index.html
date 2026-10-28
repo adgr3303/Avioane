@@ -224,6 +224,7 @@ let remoteReady = false;
 let onlineStarted = false;
 let myTurn = false;
 let pendingAttack = null;
+let onlineRound = 0;
 
 const myGrid = document.getElementById("myGrid");
 const enemyGrid = document.getElementById("enemyGrid");
@@ -262,6 +263,7 @@ function resetOnline(removeJoin){
   const oldPeer=peer;
   onlineMode=false;
   onlineRole=null;
+  onlineRound=0;
   localReady=false;
   remoteReady=false;
   onlineStarted=false;
@@ -325,6 +327,7 @@ function startOnline(role,targetPeerId=null){
   }
   const automatic=role==="auto";
   onlineMode=true;
+  onlineRound=0;
   onlineRole=role==="guest" ? "guest" : null;
   localReady=false;
   remoteReady=false;
@@ -400,7 +403,7 @@ function maybeStartOnlineGame(){
   if(onlineRole==="host"){
     onlineStarted=true;
     myTurn=true;
-    sendOnline({type:"start"});
+    sendOnline({type:"start",round:onlineRound});
     setStatus("🎯 Joc început — rândul tău.");
     setOnlineStatus("Joc început. Atacă o celulă din cadranul adversarului.");
     renderGrid();
@@ -421,7 +424,7 @@ function handleIncomingAttack(cell){
   }
   myMarks[cell]=mark;
   const defeated=myPlanes.filter(plane=>myMarks[plane.head]==="head").length===3;
-  sendOnline({type:"result",cell,mark,defeated});
+  sendOnline({type:"result",cell,mark,defeated,round:onlineRound});
   if(defeated){
     gameOver=true;
     myTurn=false;
@@ -435,6 +438,18 @@ function handleIncomingAttack(cell){
 
 function handleOnlineMessage(message){
   if(!message || typeof message.type!=="string") return;
+  if(message.type==="new-game-request"){
+    if(onlineRole==="host") newGame();
+    return;
+  }
+  if(message.type==="new-game"){
+    if(onlineRole!=="guest" || !Number.isInteger(message.round) || message.round<=onlineRound) return;
+    onlineRound=message.round;
+    resetRoundState();
+    setOnlineStatus("Partidă nouă. Așază-ți avioanele și apasă „Sunt gata”; gazda începe.");
+    return;
+  }
+  if(["ready","start","attack","result"].includes(message.type) && message.round!==onlineRound) return;
   if(message.type==="hello"){
     setOnlineStatus(onlineRole==="host"
       ? "Adversarul s-a conectat. Așezați-vă avioanele; tu vei începe după ce amândoi apăsați „Sunt gata”."
@@ -751,7 +766,7 @@ function attackCell(i){
   }
   if(!connection || !connection.open || !onlineStarted || !myTurn || gameOver || pendingAttack!==null || enemyMarks[i]) return;
   pendingAttack=i;
-  sendOnline({type:"attack",cell:i});
+  sendOnline({type:"attack",cell:i,round:onlineRound});
   setStatus("Atac la "+String.fromCharCode(65+i%10)+(Math.floor(i/10)+1)+" — așteaptă răspunsul.");
   renderGrid();
 }
@@ -769,8 +784,7 @@ function markEnemyCell(i){
   renderGrid();
 }
 
-function newGame(){
-  resetOnline(onlineMode);
+function resetRoundState(){
   myPlanes=[];
   enemyMarks=Array(100).fill("");
   myMarks=Array(100).fill("");
@@ -780,15 +794,42 @@ function newGame(){
   orientation=0;
   lastAnchor=44;
   previewCells=cellsForAnchor(lastAnchor);
+  localReady=false;
+  remoteReady=false;
+  onlineStarted=false;
+  myTurn=false;
+  pendingAttack=null;
+  gameOver=false;
   directionEl.textContent="↑ Nord";
   document.querySelectorAll(".direction-choice").forEach((button,index)=>{
     button.classList.toggle("active",index===0);
     button.setAttribute("aria-pressed",index===0 ? "true" : "false");
   });
-  gameOver=false;
+  readyBtn.hidden=true;
   setStatus("📍 Plasează avionul 1 din 3");
   mySub.textContent="Atinge capul avionului o dată pentru a-l pune. Îl poți muta atingând altă celulă; atinge același cap încă o dată ca să-l fixezi. Click dreapta sau „Rotește” schimbă direcția.";
+  document.getElementById("autoBtn").disabled=false;
+  document.getElementById("revealBtn").disabled=onlineMode;
   renderGrid();
+  updateOnlineControls();
+}
+
+function newGame(){
+  if(onlineMode && connection && connection.open){
+    if(onlineRole==="host"){
+      onlineRound++;
+      resetRoundState();
+      sendOnline({type:"new-game",round:onlineRound});
+      setOnlineStatus("Partidă nouă. Așază-ți avioanele și apasă „Sunt gata”. Tu începi.");
+    }else{
+      sendOnline({type:"new-game-request"});
+      setOnlineStatus("Ai cerut o partidă nouă. Așteaptă să reseteze gazda.");
+    }
+    return;
+  }
+  if(!onlineMode) resetOnline(false);
+  resetRoundState();
+  if(onlineMode) setOnlineStatus("Așteaptă conectarea adversarului pentru a începe partida.");
 }
 
 document.getElementById("newBtn").addEventListener("click",newGame);
@@ -810,7 +851,7 @@ readyBtn.addEventListener("click",()=>{
   if(placing || !connection || !connection.open) return;
   localReady=true;
   readyBtn.hidden=true;
-  sendOnline({type:"ready"});
+  sendOnline({type:"ready",round:onlineRound});
   setOnlineStatus(remoteReady ? "Amândoi sunteți gata. Pregătesc jocul…" : "Ești gata. Așteaptă ca adversarul să fie gata.");
   maybeStartOnlineGame();
   updateOnlineControls();
