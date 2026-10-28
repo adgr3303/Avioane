@@ -392,6 +392,7 @@ function maybeStartOnlineGame(){
     sendOnline({type:"start"});
     setStatus("🎯 Joc început — rândul tău.");
     setOnlineStatus("Joc început. Atacă o celulă din cadranul adversarului.");
+    renderGrid();
   }else{
     setOnlineStatus("Amândoi sunteți gata. Așteaptă gazda să pornească jocul…");
   }
