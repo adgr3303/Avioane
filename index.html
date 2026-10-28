@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b1d31">
+<meta name="app-version" content="2026-10-28-2">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Avioane — Duel</title>
 <style>
 :root{
@@ -20,6 +24,7 @@ h1{font-size:22px;margin:0}
 .status{background:#132d47;border:1px solid #315474;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800}
 .panel{background:var(--panel);border:1px solid #294a67;border-radius:16px;padding:10px;margin-bottom:0}
 .boards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:10px}
+body.opponent-turn .boards{opacity:.4;filter:grayscale(.8);pointer-events:none;transition:opacity .2s ease,filter .2s ease}
 h2{font-size:17px;margin:0 0 3px}
 .sub{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.35}
 .grid{
@@ -178,6 +183,7 @@ button.secondary{background:#29425c}
 
 const N = 10;
 const PERMANENT_ROOM_ID = "avioane-adgr3303-joc-1";
+const APP_VERSION = "2026-10-28-2";
 
 /*
   FORMA EXACTĂ DIN POZA TA:
@@ -235,6 +241,21 @@ const onlinePanel = document.getElementById("onlinePanel");
 const onlineStatus = document.getElementById("onlineStatus");
 const readyBtn = document.getElementById("readyBtn");
 
+async function checkForLatestVersion(){
+  try{
+    const checkUrl=new URL(location.pathname,location.origin);
+    checkUrl.searchParams.set("app-check",Date.now().toString());
+    const response=await fetch(checkUrl.toString(),{cache:"no-store"});
+    if(!response.ok) return;
+    const html=await response.text();
+    const latest=html.match(/<meta name="app-version" content="([^"]+)"/);
+    if(!latest || latest[1]===APP_VERSION) return;
+    const target=new URL(location.href);
+    if(target.searchParams.get("app-version")===latest[1]) return;
+    target.searchParams.set("app-version",latest[1]);
+    location.replace(target.toString());
+  }catch(_){}
+}
 function toast(msg){
   toastEl.textContent = msg;
   toastEl.style.display = "block";
@@ -615,6 +636,7 @@ function renderGrid(){
     });
     enemyGrid.appendChild(e);
   }
+  document.body.classList.toggle("opponent-turn",onlineMode && onlineStarted && !myTurn && !gameOver);
   syncRowCoords();
 }
 
@@ -857,6 +879,7 @@ readyBtn.addEventListener("click",()=>{
   updateOnlineControls();
 });
 
+checkForLatestVersion();
 newGame();
 startOnline("auto");
 </script>
