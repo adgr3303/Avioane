@@ -31,7 +31,9 @@ h2{font-size:17px;margin:0 0 3px}
   border-radius:6px;aspect-ratio:1;padding:0;position:relative;
 }
 .cell.preview{background:#5c4c20;border:3px solid var(--gold)}
-.cell.plane{background:var(--green);border-color:#55e7bd}
+.cell.plane-1{background:#16ad80;border-color:#55e7bd}
+.cell.plane-2{background:#8b5cf6;border-color:#c4b5fd}
+.cell.plane-3{background:#e0784f;border-color:#ffc09f}
 .cell.hit{background:var(--red)!important}
 .cell.hit-body{background:#ffd05a!important;border-color:#fff0a8!important}
 .cell.hit-head{background:#16ad80!important;border-color:#70f0c7!important}
@@ -272,7 +274,8 @@ function randomPlanes(){
 }
 
 function renderGrid(){
-  const mine = new Set(myPlanes.flat());
+  const mine = new Map();
+  myPlanes.forEach((plane,index)=>plane.forEach(cell=>mine.set(cell,index+1)));
   myGrid.innerHTML="";
   enemyGrid.innerHTML="";
 
@@ -281,7 +284,7 @@ function renderGrid(){
     b.className="cell";
     b.type="button";
 
-    if(mine.has(i)) b.classList.add("plane");
+    if(mine.has(i)) b.classList.add("plane","plane-"+mine.get(i));
     applyMarkClass(b,myMarks[i]);
     if(placing && previewCells && previewCells.includes(i) && validPlacement(previewCells,myPlanes)){
       b.classList.add("preview");
@@ -339,9 +342,14 @@ function syncRowCoords(){
 window.addEventListener("resize",syncRowCoords);
 
 function renderMyOnly(){
-  const mine=new Set(myPlanes.flat());
+  const mine=new Map();
+  myPlanes.forEach((plane,index)=>plane.forEach(cell=>mine.set(cell,index+1)));
   [...myGrid.children].forEach((b,i)=>{
-    b.classList.toggle("plane",mine.has(i));
+    const planeNo=mine.get(i)||0;
+    b.classList.toggle("plane",planeNo>0);
+    b.classList.toggle("plane-1",planeNo===1);
+    b.classList.toggle("plane-2",planeNo===2);
+    b.classList.toggle("plane-3",planeNo===3);
     b.classList.toggle("preview",
       placing && previewCells &&
       previewCells.includes(i) &&
