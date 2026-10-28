@@ -312,11 +312,16 @@ function attachConnection(conn){
   conn.on("close",()=>{
     if(!onlineMode) return;
     connection=null;
+    localReady=false;
+    remoteReady=false;
     onlineStarted=false;
     myTurn=false;
-    setOnlineStatus("Conexiunea s-a întrerupt. Creează o invitație nouă.");
+    pendingAttack=null;
+    inviteBtn.disabled=false;
+    setOnlineStatus("Adversarul s-a deconectat. Retrimite invitația sau pornește un joc nou.");
     setStatus("Conexiunea cu adversarul s-a întrerupt.");
     updateOnlineControls();
+    renderGrid();
   });
   conn.on("error",()=>{
     if(onlineMode) setOnlineStatus("Nu s-a putut menține conexiunea. Încearcă o invitație nouă.");
@@ -324,6 +329,7 @@ function attachConnection(conn){
 }
 
 function startOnline(role,targetPeerId=null){
+  if(onlineMode) resetOnline(false);
   if(typeof Peer!=="function"){
     showOnlinePanel("Conexiunea online nu s-a încărcat. Verifică internetul și reîncarcă pagina.");
     return;
@@ -350,7 +356,7 @@ function startOnline(role,targetPeerId=null){
       inviteLink.value=url.toString();
       inviteLink.hidden=false;
       copyInviteBtn.hidden=false;
-      setOnlineStatus("Trimite linkul prietenului. Jocul începe după ce amândoi apăsați „Sunt gata”.");
+      setOnlineStatus("Trimite linkul prietenului și păstrează pagina deschisă. Jocul începe când amândoi apăsați „Sunt gata”.");
       updateOnlineControls();
     }else{
       setOnlineStatus("Am găsit jocul. Se stabilește conexiunea…");
@@ -359,7 +365,7 @@ function startOnline(role,targetPeerId=null){
   });
   if(role==="host"){
     peer.on("connection",conn=>{
-      if(connection && connection.open){
+      if(connection){
         conn.close();
         return;
       }
@@ -373,6 +379,7 @@ function startOnline(role,targetPeerId=null){
       "unavailable-id":"Nu s-a putut crea invitația. Încearcă din nou."
     };
     setOnlineStatus(messages[error.type] || "Nu s-a putut porni jocul online. Reîncarcă pagina și încearcă din nou.");
+    inviteBtn.disabled=false;
     updateOnlineControls();
   });
 }
