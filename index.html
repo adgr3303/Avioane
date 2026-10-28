@@ -341,8 +341,9 @@ function startOnline(role,targetPeerId=null){
     showOnlinePanel("Conexiunea online nu s-a încărcat. Verifică internetul și reîncarcă pagina.");
     return;
   }
+  const automatic=role==="auto";
   onlineMode=true;
-  onlineRole=role;
+  onlineRole=role==="guest" ? "guest" : null;
   localReady=false;
   remoteReady=false;
   onlineStarted=false;
@@ -352,44 +353,71 @@ function startOnline(role,targetPeerId=null){
   myMarks=Array(100).fill("");
   gameOver=false;
   inviteBtn.disabled=true;
-  inviteLink.hidden=true;
-  copyInviteBtn.hidden=true;
-  showOnlinePanel(role==="host" ? "Pornește invitația permanentă…" : "Mă conectez la joc…");
-  if(role==="host"){
-    inviteLink.value=permanentInviteUrl();
-    inviteLink.hidden=false;
-    copyInviteBtn.hidden=false;
-    setOnlineStatus("Același link funcționează de fiecare dată. Trimite-l prietenului și ține pagina deschisă.");
-  }
-  peer=role==="host" ? new Peer(PERMANENT_ROOM_ID) : new Peer();
-  peer.on("open",()=>{
-    if(role==="host"){
-      setOnlineStatus("Linkul permanent este activ. Trimite-l prietenului și păstrează pagina deschisă.");
-      updateOnlineControls();
-    }else{
-      setOnlineStatus("Am găsit jocul. Se stabilește conexiunea…");
-      attachConnection(peer.connect(targetPeerId,{reliable:true}));
-    }
-  });
-  if(role==="host"){
-    peer.on("connection",conn=>{
-      if(connection){
-        conn.close();
-        return;
-      }
-      attachConnection(conn);
+  inviteLink.value=permanentInviteUrl();
+  inviteLink.hidden=false;
+  copyInviteBtn.hidden=false;
+  showOnlinePanel(automatic ? "Pornește jocul…" : role==="host" ? "Pornește jocul online…" : "Mă conectez la joc…");
+  if(automatic) setOnlineStatus("Același link este pentru amândoi. Aștept să intri în joc…");
+  else if(role==="host") setOnlineStatus("Trimite linkul prietenului și ține pagina deschisă.");
+  let fallbackStarted=false;
+
+  function connectAsGuest(peerInstance,targetId){
+    onlineRole="guest";
+    peerInstance.on("open",()=>{
+      if(peer!==peerInstance) return;
+      setOnlineStatus("Jocul a fost găsit. Mă conectez…");
+      attachConnection(peerInstance.connect(targetId,{reliable:true}));
+    });
+    peerInstance.on("error",error=>{
+      if(peer!==peerInstance) return;
+      const message=error.type==="peer-unavailable"
+        ? "Nu găsesc gazda. Roag-o să deschidă linkul prima."
+        : "Conexiunea s-a întrerupt. Reîncarcă pagina și încearcă din nou.";
+      setOnlineStatus(message);
+      inviteBtn.disabled=false;
     });
   }
-  peer.on("error",error=>{
-    const messages={
-      "peer-unavailable":"Gazda nu este online. Roag-o să apese «Invită un prieten», apoi reîncarcă pagina cu același link.",
-      "network":"Conexiunea la internet s-a întrerupt. Verifică rețeaua și încearcă din nou.",
-      "unavailable-id":"Linkul permanent este deja activ într-o altă filă. Închide acea filă și încearcă din nou."
-    };
-    setOnlineStatus(messages[error.type] || "Nu s-a putut porni jocul online. Reîncarcă pagina și încearcă din nou.");
-    inviteBtn.disabled=false;
-    updateOnlineControls();
-  });
+
+  function startHost(){
+    onlineRole="host";
+    const hostPeer=new Peer(PERMANENT_ROOM_ID);
+    peer=hostPeer;
+    hostPeer.on("open",()=>{
+      if(peer!==hostPeer) return;
+      setOnlineStatus("Jocul este pornit. Prietenul tău trebuie să deschidă același link.");
+      updateOnlineControls();
+    });
+    hostPeer.on("connection",conn=>{
+      if(peer!==hostPeer || connection){ conn.close(); return; }
+      attachConnection(conn);
+    });
+    hostPeer.on("error",error=>{
+      if(peer!==hostPeer) return;
+      if(automatic && error.type==="unavailable-id" && !fallbackStarted){
+        fallbackStarted=true;
+        try{hostPeer.destroy();}catch(_){}
+        const guestPeer=new Peer();
+        peer=guestPeer;
+        setOnlineStatus("Jocul este deja pornit. Mă conectez ca al doilea jucător…");
+        connectAsGuest(guestPeer,PERMANENT_ROOM_ID);
+        return;
+      }
+      const message=error.type==="unavailable-id"
+        ? "Jocul este deja deschis în altă filă. Închide-l sau deschide linkul pentru a intra ca al doilea jucător."
+        : "Nu s-a putut porni jocul. Verifică internetul și reîncarcă pagina.";
+      setOnlineStatus(message);
+      inviteBtn.disabled=false;
+      updateOnlineControls();
+    });
+  }
+
+  if(role==="guest"){
+    const guestPeer=new Peer();
+    peer=guestPeer;
+    connectAsGuest(guestPeer,targetPeerId);
+  }else{
+    startHost();
+  }
 }
 
 function maybeStartOnlineGame(){
@@ -825,7 +853,7 @@ readyBtn.addEventListener("click",()=>{
 
 const invitePeerId=new URLSearchParams(location.search).get("join");
 newGame();
-if(invitePeerId) startOnline("guest",invitePeerId);
+if(invitePeerId) startOnline(invitePeerId===PERMANENT_ROOM_ID ? "auto" : "guest",invitePeerId);
 </script>
 </body>
 </html>
